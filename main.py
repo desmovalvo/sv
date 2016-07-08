@@ -2,46 +2,31 @@
 
 # requirements
 from scipy.spatial import distance
+from numpy.linalg import norm
 from termcolor import colored
 from random import randint
+from stereolibs import *
+from math import sqrt
 import numpy as np
 import getopt
 import time
 import sys
 import cv2
-
-def pixelbased_pixel_value(ref_pix, target_image):
-
-    # algorithm parameters
-    min_distance = 100000
-    
-    # initialization
-    disparity = 0
-
-    # calculate the output value
-    for xx in xrange(max(x-disp_range, 0), min(x+disp_range, o_width)):
-        tar_pix = target_image[y, xx]
-        d = distance.euclidean(ref_pix, tar_pix) 
-        if d < min_distance:
-            min_distance = d
-            disparity = x - xx
-
-    # return 
-    return int(float(255 * abs(disparity)) / (2 * disp_range))
-
+import pdb
 
 # main
 if __name__ == "__main__":
 
     # read command line parameters
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vl:r:", ["verbose", "leftimg=", "rightimg="])
+        opts, args = getopt.getopt(sys.argv[1:], "vl:r:c:", ["verbose", "leftimg=", "rightimg=", "config="])
     except getopt.GetoptError as err:
         sys.exit(2)
 
     verbose = False
     leftimage = None
     rightimage = None
+    configfile = "stereo.conf"
     for opt, arg in opts:
         if opt in ("-v", "--verbose"):
             verbose = True
@@ -49,11 +34,18 @@ if __name__ == "__main__":
             leftimage = arg
         elif opt in ("-l", "--rightimg"):
             rightimage = arg
+        elif opt in ("-c", "--config"):
+            configfile = arg
         else:
             assert False, "unhandled option"
 
-    # algorithm parameters
-    disp_range = 15
+    # read settings
+    print colored("main> ", "blue", attrs=["bold"]) + "Reading global settings"
+    config = ConfigParser.ConfigParser()
+    config.read(configfile)
+    settings = {}
+    settings["alg"] = config.get("global", "algorithm")
+    settings["output_file"] = config.get("global", "output_file")
 
     # open images
     print colored("main> ", "blue", attrs=["bold"]) + "Opening image %s" % leftimage
@@ -66,45 +58,22 @@ if __name__ == "__main__":
 
     # initialization of outputimage
     print colored("main> ", "blue", attrs=["bold"]) + "Initializing output image"
-    outimage = "out.png"
+    o_file = settings["output_file"]
     o_width = max(r_img.shape[1], l_img.shape[1])
     o_height = max(r_img.shape[0], l_img.shape[0])
-    size = (o_height, o_width, 1)
-    o_img = np.zeros(size, dtype=np.uint8)
+    o_size = (o_height, o_width, 1)
+    o_img = np.zeros(o_size, dtype=np.uint8)
 
-    # segmentation
-    # print colored("main> ", "blue", attrs=["bold"]) + "Performing segmentation on image %s" % leftimage,
-    # start_time = time.clock() * 1000
-    # l_s_img = cv2.pyrMeanShiftFiltering(l_img, 30, 30)
-    # end_time = time.clock() * 1000
-    # print "%s ms" % round(end_time - start_time, 3)
+    # build disparity map
+    if settings["alg"].upper() == "PIXEL_BASED":
+        out_img = pixelbased(l_img, r_img, o_img, configfile)
 
-    # print colored("main> ", "blue", attrs=["bold"]) + "Performing segmentation on image %s" % rightimage,
-    # start_time = time.clock() * 1000
-    # r_s_img = cv2.pyrMeanShiftFiltering(r_img, 30, 1)
-    # end_time = time.clock() * 1000
-    # print "%s ms" % round(end_time - start_time, 3)
-
-    y = 0
-    for pixel in xrange(o_height * o_width):
-        
-        # determine x and y
-        newy = pixel / o_width
-        if y != newy:
-            y = newy
-            print "RIGA %s" % y
-        x = pixel % o_width
-
-        # get a pixel from the reference image
-        ref_pix = l_img[y,x]
-           
-        # determine the pixel value for the output image
-        pv = pixelbased_pixel_value(ref_pix, r_img)
-        o_img.itemset((y, x, 0), pv)
+    elif settings["alg"].upper() == "FIXED_WINDOW":
+        out_img = fixedwindow(l_img, r_img, o_img, configfile)
 
     # display the output image
-    cv2.imshow("output image", o_img)
+    cv2.imshow("output image", out_img)
     cv2.waitKey(0)
 
     # write the image to file
-    cv2.imwrite(outimage, o_img)
+    cv2.imwrite(o_file, out_img)
