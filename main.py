@@ -71,6 +71,12 @@ if __name__ == "__main__":
     elif settings["alg"].upper() == "FIXED_WINDOW":
         out_img = fixedwindow(l_img, r_img, o_img, configfile)
 
+    elif settings["alg"].upper() == "SHIFTABLE_WINDOW":
+        out_img = shiftablewindow(l_img, r_img, o_img, configfile)
+
+    elif settings["alg"].upper() == "MULTIPLE_WINDOWS":
+        out_img = multiplewindows(l_img, r_img, o_img, configfile)
+
     # display the output image
     cv2.imshow("output image", out_img)
     cv2.waitKey(0)
